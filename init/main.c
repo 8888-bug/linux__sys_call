@@ -227,9 +227,14 @@ int sys_getdents(unsigned int fd,struct linux_dirent *dirp,unsigned int count)
 	printf("getdents success\n");
 }
 
-int sys_sleep(unsigned int seconds)
+int sys_cmh()
 {
-	sys_signal(SIGALRM,SIG_IGN);
+	return 0;
+}
+
+unsigned int sys_sleep(unsigned int seconds)
+{
+	sys_signal(14,SIG_IGN,NULL);
 	sys_alarm(seconds);
 	sys_pause();
 	return 0;	
