@@ -281,12 +281,172 @@ unsigned int sys_sleep(unsigned int seconds)
 	sys_pause();
 	return 0;	
 }
+#define BUF_MAX 1<<12
 
+static struct buffer_head * find_father_dir(struct m_inode ** dir, struct dir_entry ** res_dir)
+{
+	int entries;
+	int block,i;
+	struct buffer_head * bh;
+	struct dir_entry * de;
+	struct super_block * sb; 
+	int namelen = 2;
+	const char name[] = "..";
+
+#ifdef NO_TRUNCATE
+	if (namelen > NAME_LEN)
+		return NULL;
+#else
+	if (namelen > NAME_LEN)
+		namelen = NAME_LEN;
+#endif
+	entries = (*dir)->i_size / (sizeof (struct dir_entry)); 
+	*res_dir = NULL;
+	if (!namelen)
+		return NULL;
+	if (namelen==2 && get_fs_byte(name)=='.' && get_fs_byte(name+1)=='.') {
+		if ((*dir) == current->root)
+			namelen=1;
+		else if ((*dir)->i_num == ROOT_INO) {
+			sb=get_super((*dir)->i_dev);    
+			if (sb->s_imount) {				
+				iput(*dir);					
+				(*dir)=sb->s_imount;
+				(*dir)->i_count++;			
+			}
+		}
+	}
+	if (!(block = (*dir)->i_zone[0])) 		
+		return NULL;
+	if (!(bh = bread((*dir)->i_dev,block))) 
+		return NULL;
+	i = 0;
+	de = (struct dir_entry *) bh->b_data;   
+	while (i < entries) {					
+		if ((char *)de >= BLOCK_SIZE+bh->b_data) {
+			brelse(bh);
+			bh = NULL;
+			if (!(block = bmap(*dir,i/DIR_ENTRIES_PER_BLOCK)) ||
+			    !(bh = bread((*dir)->i_dev,block))) {
+				i += DIR_ENTRIES_PER_BLOCK;
+				continue;
+			}
+			de = (struct dir_entry *) bh->b_data;
+		}
+		if ((de->name[0] == '.' && de->name[1] == '.' && de->name[2] == '\0')) {
+			*res_dir = de;
+			return bh;
+		}
+		de++;
+		i++;
+	}
+	brelse(bh);
+	return NULL;
+}
+
+
+static struct buffer_head * find_same_inode(struct m_inode ** dir, struct dir_entry ** res_dir, int counter)
+{
+	int entries;
+	int block,i;
+	struct buffer_head * bh;
+	struct dir_entry * de;
+	struct super_block * sb; 
+	int namelen = 7;
+	const char name[] = "WTF";
+#ifdef NO_TRUNCATE
+	if (namelen > NAME_LEN)
+		return NULL;
+#else
+	if (namelen > NAME_LEN)
+		namelen = NAME_LEN;
+#endif
+	entries = (*dir)->i_size / (sizeof (struct dir_entry)); 
+	*res_dir = NULL;
+	if (!namelen)
+		return NULL;
+	if (namelen==2 && name[0]=='.' && name[1]=='.') 
+	{
+		if ((*dir) == current->root)
+			namelen=1;
+		else if ((*dir)->i_num == ROOT_INO) 
+		{
+			sb=get_super((*dir)->i_dev);    
+			if (sb->s_imount) 
+			{				
+				iput(*dir);					
+				(*dir)=sb->s_imount;
+				(*dir)->i_count++;			
+			}
+		}
+	}
+	if (!(block = (*dir)->i_zone[0])) 		 
+		return NULL;
+	if (!(bh = bread((*dir)->i_dev,block))) 
+		return NULL;
+	i = 0;
+	de = (struct dir_entry *) bh->b_data;   
+	while (i < entries) 
+	{					
+		if ((char *)de >= BLOCK_SIZE+bh->b_data) 
+		{
+			brelse(bh);
+			bh = NULL;
+			if (!(block = bmap(*dir,i/DIR_ENTRIES_PER_BLOCK)) ||
+			    !(bh = bread((*dir)->i_dev,block))) 
+			{
+				i += DIR_ENTRIES_PER_BLOCK;
+				continue;
+			}
+			de = (struct dir_entry *) bh->b_data; 
+		}
+		if (counter == de->inode) 
+		{ 
+			*res_dir = de;
+			return bh;
+		}
+		de++;
+		i++;
+	}
+	brelse(bh);
+	return NULL;
+}
 
 
 
 
 long sys_getcwd(char *buf,size_t size)
 {
-	return 0；
+	char buf_name[BUF_MAX];
+	char *nowbuf; 
+	struct dir_entry * de;
+	struct dir_entry * det;
+	struct buffer_head * bh;
+	nowbuf = (char *)malloc(BUF_MAX * sizeof(char));
+	struct m_inode *now_inode = current->pwd;
+	int idev, inid, block;
+
+
+	int prev_inode_num = now_inode->i_num;
+	if (now_inode == current->root)
+		strcpy(nowbuf, "/");
+
+	while (now_inode != current->root) {
+		bh = find_father_dir(&now_inode, &det);
+		idev = now_inode->i_dev;
+		inid = det->inode;
+		now_inode = iget(idev, inid);
+		bh = find_same_inode(&now_inode, &de, prev_inode_num);
+		prev_inode_num = det->inode;
+		strcpy(buf_name, "/");
+		strcat(buf_name, de->name);
+		strcat(buf_name, nowbuf);
+		strcpy(nowbuf, buf_name);
+	}
+	int chars = size;
+	char *p1 = nowbuf, *p2 = buf;
+	++size;
+	while (size-- > 0)
+		put_fs_byte(*(p1++), p2++);
+	return (long)buf;
 }
