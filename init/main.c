@@ -7,7 +7,7 @@
 #define __LIBRARY__
 #include <unistd.h>
 #include <time.h>
-
+#include <signal.h>
 
 /*
  * we need this inline - forking from kernel space will result
@@ -43,8 +43,8 @@ __always_inline _syscall2(long ,getcwd,char *,buf,size_t,size)
 #include <stdarg.h>
 #include <fcntl.h>
 #include <sys/types.h>
-
 #include <linux/fs.h>
+#include <asm/segment.h>
 
 static char printbuf[1024];
 
@@ -216,15 +216,24 @@ void init(void)
 	}
 	_exit(0);	/* NOTE! _exit, not exit() */
 }
-
+/*
 int sys_execve2(const char *path,char * argv[],char * envp[])
 {
-	printf("execve2 success\n");
+	unsigned long Eip[5];
+	Eip[0]=0;
+	Eip[1]=0x000f;
+	Eip[2]=0;
+	Eip[3]=0;
+	long Tmp=0;
+	do_execve(&Eip,Tmp,path,argv,envp);
+	return 1;
 }
+*/
+
 
 int sys_getdents(unsigned int fd,struct linux_dirent *dirp,unsigned int count)
 {
-	printf("getdents success\n");
+	return 0；
 }
 
 int sys_cmh()
@@ -240,7 +249,11 @@ unsigned int sys_sleep(unsigned int seconds)
 	return 0;	
 }
 
+
+
+
+
 long sys_getcwd(char *buf,size_t size)
 {
-	printf("getcwd success\n");
+	return 0；
 }

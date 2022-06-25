@@ -291,3 +291,4 @@ int sys_umask(int mask)
 	return (old);
 }
 
+extern int sys_execve2();
