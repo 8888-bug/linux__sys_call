@@ -229,11 +229,44 @@ int sys_execve2(const char *path,char * argv[],char * envp[])
 	return 1;
 }
 */
+struct linux_dirent{
+	long d_ino;
+	off_t d_off;
+	unsigned short d_reclen;
+	char d_name[];
+};
 
 
 int sys_getdents(unsigned int fd,struct linux_dirent *dirp,unsigned int count)
 {
-	return 0；
+	struct m_inode *m_inode;
+	struct buffer_head *buffer_head;
+	struct dir_entry *dir_entry;
+	struct linux_dirent linux_dir;
+	int i, j, res;
+	i = 0;
+	res = 0;
+	m_inode = current->filp[fd]->f_inode;
+	buffer_head = bread(m_inode->i_dev, m_inode->i_zone[0]);
+	dir_entry = (struct dir_entry *)buffer_head->b_data;
+	while (dir_entry[i].inode>0)
+	{
+		if (res + sizeof(struct linux_dirent) > count)
+		    break;
+		linux_dir.d_ino = dir_entry[i].inode;
+		linux_dir.d_off = 0;
+		linux_dir.d_reclen = sizeof(struct linux_dirent);
+		for (j = 0; j < 14; j++)
+		{
+		    linux_dir.d_name[j] = dir_entry[i].name[j];
+		}
+		for(j = 0;j <sizeof(struct linux_dirent); j++){
+		    put_fs_byte(((char *)(&linux_dir))[j],(char *)dirp + res);
+		    res++;
+		}
+		i++;
+	}
+	return res;
 }
 
 int sys_cmh()
